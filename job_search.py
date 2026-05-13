@@ -20,17 +20,23 @@ RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL")
 # --- Constants ---
 JSEARCH_API_URL = "https://jsearch.p.rapidapi.com/search"
 SEARCH_QUERIES = [
-    "Frontend Developer",
-    "Full Stack Developer"
+    {"query": "Frontend Developer", "country": "NG"},      # Nigeria priority
+    {"query": "Full Stack Developer", "country": "NG"},    # Nigeria priority
+    {"query": "Frontend Developer", "country": None},        # Global fallback
+    {"query": "Full Stack Developer", "country": None}       # Global fallback
 ]
 RESULTS_PER_QUERY = 20  # Number of results to fetch per role
 SEARCH_RADIUS = 0       # Not used for worldwide, but good for context
 DATE_POSTED = "today"   # Filtering for jobs posted within the last 24 hours
 REMOTE_ONLY = True      # Filter for remote-only positions
+PRIORITY_COUNTRY = "Nigeria"  # Country to prioritize in results
 
-def search_jobs(query):
+def search_jobs(query, country=None):
     """
     Search for jobs using the JSearch API via RapidAPI.
+    Args:
+        query: Job title/role to search for
+        country: Optional country code (e.g., 'NG' for Nigeria, None for worldwide)
     """
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -45,18 +51,23 @@ def search_jobs(query):
         "remote_jobs_only": "true"
     }
     
+    # Add country filter if specified
+    if country:
+        params["country"] = country
+    
     try:
         response = requests.get(JSEARCH_API_URL, headers=headers, params=params)
         response.raise_for_status()
         data = response.json()
         return data.get("data", [])
     except Exception as e:
-        print(f"Error fetching jobs for query '{query}': {e}")
+        print(f"Error fetching jobs for query '{query}' in country {country}: {e}")
         return []
 
 def filter_jobs(jobs):
     """
     Filter and clean the raw job list based on specific criteria.
+    Prioritizes jobs from the priority country (Nigeria).
     """
     seen_job_ids = set()
     filtered_jobs = []
@@ -95,12 +106,18 @@ def filter_jobs(jobs):
             salary_str = f"{currency} {min_salary:,} - {max_salary:,}"
         elif min_salary:
             salary_str = f"{currency} {min_salary:,}+"
+        
+        # Get country information
+        job_country = job.get('job_country') or 'Unknown'
+        is_priority_country = job_country.lower() in ["nigeria", "ng", "naira"]
             
         # Clean job dictionary
         clean_job = {
             "job_title": job.get("job_title"),
             "company": job.get("employer_name"),
-            "location": f"{job.get('job_city', 'Remote')}, {job.get('job_country', '')}".strip(", "),
+            "location": f"{job.get('job_city', 'Remote')}, {job_country}".strip(", "),
+            "country": job_country,
+            "is_priority": is_priority_country,
             "salary": salary_str,
             "direct_link": job.get("job_apply_link"),
             "job_description": description[:500] + "..." if len(description) > 500 else description
@@ -108,6 +125,9 @@ def filter_jobs(jobs):
         
         filtered_jobs.append(clean_job)
         seen_job_ids.add(job_id)
+    
+    # Sort by priority country first (Nigeria), then by other criteria
+    filtered_jobs.sort(key=lambda x: not x["is_priority"])
         
     return filtered_jobs
 
@@ -221,13 +241,13 @@ def build_email_html(jobs):
                     </thead>
                     <tbody>
                         {% for job in jobs %}
-                        <tr>
-                            <td><strong>{{ job.job_title }}</strong></td>
+                        <tr style="{% if job.is_priority %}background-color: #fff9e6 !important;{% endif %}">
+                            <td><strong>{{ job.job_title }}</strong>{% if job.is_priority %} <span style="color: #ff6b35; font-weight: bold; margin-left: 5px;">🇳🇬</span>{% endif %}</td>
                             <td>{{ job.company }}</td>
                             <td>{{ job.location }}</td>
                             <td>{{ job.salary }}</td>
-                            <td>{{ job.top_keywords }}</td>
-                            <td>{{ job.technical_skills }}</td>
+                            <td><span class="tag">{{ job.top_keywords }}</span></td>
+                            <td><span class="tag">{{ job.technical_skills }}</span></td>
                             <td><a href="{{ job.direct_link }}" class="apply-btn">Apply</a></td>
                         </tr>
                         {% endfor %}
@@ -242,6 +262,7 @@ def build_email_html(jobs):
 
             <div class="footer">
                 <p>Filtered: Remote &middot; Frontend & Full Stack &middot; Last 24h &middot; Entry to Senior</p>
+                <p>🇳🇬 = Nigeria (Priority) &middot; Global opportunities also included</p>
                 <p>&copy; 2026 JobHunter Automation</p>
             </div>
         </div>
@@ -280,20 +301,26 @@ def send_email(html_content):
 def main():
     """
     Orchestrate the job search and email notification process.
+    Searches Nigeria-based opportunities first, then global opportunities.
     """
     print(f"Starting job search for {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}...")
     
     all_raw_jobs = []
-    for query in SEARCH_QUERIES:
-        print(f"Searching for: {query}")
-        results = search_jobs(query)
+    for search_item in SEARCH_QUERIES:
+        query = search_item["query"]
+        country = search_item.get("country")
+        location_str = f"in {country}" if country else "worldwide"
+        print(f"Searching for: {query} {location_str}")
+        results = search_jobs(query, country)
         all_raw_jobs.extend(results)
         
     filtered_jobs = filter_jobs(all_raw_jobs)
-    print(f"Found {len(filtered_jobs)} unique jobs after filtering.")
+    nigeria_count = sum(1 for job in filtered_jobs if job["is_priority"])
+    print(f"Found {len(filtered_jobs)} unique jobs after filtering ({nigeria_count} from Nigeria).")
     
     html_content = build_email_html(filtered_jobs)
     send_email(html_content)
 
 if __name__ == "__main__":
     main()
+

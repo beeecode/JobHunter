@@ -4,11 +4,12 @@ An automated tool that searches for remote Frontend and Full Stack developer job
 
 ## ✨ Features
 - **Daily Automated Search**: Runs every day at 10:00 AM UTC via GitHub Actions.
+- **Nigeria-Focused Search**: Prioritizes remote opportunities within Nigeria, with global jobs as fallback.
 - **Smart Filtering**: Targets Frontend and Full Stack roles while excluding executive/C-level positions.
 - **Remote Only**: Specifically searches for "Worldwide" and "Remote" opportunities.
 - **Salary Insights**: Extracts and displays salary information whenever available.
 - **AI-Ready Keywords**: Automatically extracts top 5 keywords and technical skills from each job description to help with your resume SEO.
-- **Professional Newsletter**: Delivers results in a clean, responsive HTML table.
+- **Professional Newsletter**: Delivers results in a clean, responsive HTML table with visual indicators for Nigeria-based jobs (🇳🇬).
 
 ## 📋 Prerequisites
 - **Python 3.11+**
@@ -52,14 +53,31 @@ For security, this script uses an "App Password" rather than your main Gmail pas
 
 ## ⚙️ Customization
 
-### Change Search Queries
-Open `job_search.py` and modify the `SEARCH_QUERIES` list:
+### Change Search Queries or Priority Country
+Open `job_search.py` and modify the `SEARCH_QUERIES` list. Currently set to prioritize Nigeria:
 ```python
 SEARCH_QUERIES = [
-    "Frontend Developer",
-    "Full Stack Developer",
-    "React Engineer" # Add your own!
+    {"query": "Frontend Developer", "country": "NG"},      # Nigeria priority
+    {"query": "Full Stack Developer", "country": "NG"},    # Nigeria priority
+    {"query": "Frontend Developer", "country": None},        # Global fallback
+    {"query": "Full Stack Developer", "country": None}       # Global fallback
 ]
+```
+
+To change the priority country, modify the `country` parameter. Use country codes like:
+- `"NG"` for Nigeria
+- `"US"` for United States
+- `"GB"` for United Kingdom
+- `"CA"` for Canada
+- `None` for worldwide
+
+Jobs from the priority country will appear first in the newsletter with a 🇳🇬 indicator and highlighted background.
+
+### Add Additional Job Roles
+Simply add more dictionaries to `SEARCH_QUERIES`:
+```python
+{"query": "React Developer", "country": "NG"},
+{"query": "Backend Developer", "country": None}
 ```
 
 ### Change the Notification Time
